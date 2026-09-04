@@ -208,6 +208,9 @@
     store.set("hbr_root",  ($("cRoot").value.trim() || "MonApp"));
     loadCfg();
     say($("cfgLog"), "Réglages enregistrés.");
+    // Refermer : un panneau de réglages qui reste ouvert après « Enregistrer »
+    // laisse croire que rien ne s'est passé.
+    $("sheet").classList.add("hidden");
   });
 
   /* ---------- navigation ---------- */
@@ -269,14 +272,21 @@
         return Promise.all(d.files.map(function(f){
           return api("files?q=" + q("'" + f.id + "' in parents and trashed=false") + "&fields=files(id,name)")
             .then(function(r){
-              return { folder:f.name, files:r.files.filter(function(x){ return /\.md$/i.test(x.name); }) };
+              // `total` sert à distinguer « dossier vide » de « dossier plein
+              // de fichiers dont aucun n'est un .md » — deux situations qui
+              // demandent deux gestes différents.
+              return {
+                folder: f.name,
+                total: r.files.length,
+                files: r.files.filter(function(x){ return /\.md$/i.test(x.name); })
+              };
             });
         }));
       })
       .then(function(groups){
         var jobs = [];
         groups.forEach(function(g){
-          if(!g.files.length) jobs.push(Promise.resolve({ folder:g.folder, empty:true }));
+          if(!g.files.length) jobs.push(Promise.resolve({ folder:g.folder, empty:true, total:g.total }));
           g.files.forEach(function(f){
             jobs.push(
               fetch("https://www.googleapis.com/drive/v3/files/" + f.id + "?alt=media", {
@@ -293,7 +303,9 @@
       })
       .then(function(all){
         cards = all.filter(function(x){ return !x.empty; });
-        var empties = all.filter(function(x){ return x.empty; }).map(function(x){ return x.folder; });
+        var empties = {};
+        all.filter(function(x){ return x.empty; })
+           .forEach(function(x){ empties[x.folder] = x.total; });
         say($("homeLog"), "");
         buildComb(empties);
       })
@@ -322,7 +334,8 @@
     host.innerHTML = "";
     var folders = {};
     cards.forEach(function(c){ folders[c.folder] = (folders[c.folder]||0) + 1; });
-    (empties||[]).forEach(function(f){ if(!(f in folders)) folders[f] = 0; });
+    var ignores = empties || {};
+    Object.keys(ignores).forEach(function(f){ if(!(f in folders)) folders[f] = 0; });
 
     var names = Object.keys(folders).sort();
     if(!names.length){
@@ -338,10 +351,18 @@
       b.innerHTML =
         '<span class="glyph">' + (GLYPHS[key] || "◆") + "</span>" +
         '<span class="label">' + esc(cap(f)) + "</span>" +
-        '<span class="count">' + (folders[f] ? folders[f] + (folders[f] > 1 ? " fiches" : " fiche") : "vide") + "</span>";
+        '<span class="count">' + etiquette(folders[f], ignores[f]) + "</span>";
       b.addEventListener("click", function(){ openTheme(f); });
       host.appendChild(b);
     });
+  }
+
+  /* Dire POURQUOI un thème est vide : un dossier sans rien et un dossier
+     rempli de fichiers qu'on ignore ne se corrigent pas de la même façon. */
+  function etiquette(fiches, autres){
+    if(fiches) return fiches + (fiches > 1 ? " fiches" : " fiche");
+    if(autres) return autres + (autres > 1 ? " fichiers" : " fichier") + ", aucun .md";
+    return "vide";
   }
 
   function cap(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
