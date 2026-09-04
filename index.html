@@ -238,8 +238,58 @@
     if(e.target === $("sheet")) $("sheet").classList.add("hidden");
   });
 
-  /* ---------- Google ---------- */
-  function connect(cb){
+  /* ---------- Google ----------
+     Le jeton reste en mémoire et meurt avec l'onglet : il n'est écrit ni dans
+     le stockage local, ni dans un cookie. C'est le comportement le plus sûr,
+     mais il obligeait à retoucher « Connecter Drive » à chaque ouverture.
+
+     `prompt:""` demande à Google un jeton SANS interface : il en accorde un si
+     l'autorisation a déjà été donnée et qu'une session Google est ouverte dans
+     ce navigateur. Rien de plus n'est conservé de notre côté — c'est la
+     session Google qui fait le travail, pas un secret qu'on garderait.
+
+     Si ce silence échoue — session expirée, autorisation retirée, autre
+     compte — on ne dit rien d'alarmant : on affiche l'hexagone « Connecter
+     Drive », exactement comme avant. Le pire cas est donc le comportement
+     d'aujourd'hui. */
+  var clientJeton = null;
+  var apresConnexion = null;
+
+  function replierSurLeBouton(){
+    apresConnexion = null;
+    say($("homeLog"), "");
+    showConnectHex();
+  }
+
+  function obtenirClient(){
+    if(clientJeton) return clientJeton;
+    clientJeton = google.accounts.oauth2.initTokenClient({
+      client_id: cfg.client,
+      scope:"https://www.googleapis.com/auth/drive.readonly",
+      callback:function(r){
+        if(r && r.access_token){
+          token = r.access_token;
+          var suite = apresConnexion; apresConnexion = null;
+          if(suite) suite();
+        } else if(silencieux){
+          replierSurLeBouton();
+        } else {
+          say($("homeLog"), "Connexion Google refusée.", true);
+        }
+      },
+      // Certaines versions du script Google signalent l'échec ici plutôt que
+      // dans le callback : les deux chemins mènent au même repli.
+      error_callback:function(){
+        if(silencieux) replierSurLeBouton();
+        else say($("homeLog"), "Connexion Google impossible.", true);
+      }
+    });
+    return clientJeton;
+  }
+
+  var silencieux = false;
+
+  function connect(cb, sansInterface){
     if(!cfg.client){
       say($("homeLog"), "Ajoute ton ID client Google OAuth dans les réglages (bouton ··· en bas).", true);
       return;
@@ -247,14 +297,10 @@
     if(!window.google || !google.accounts || !google.accounts.oauth2){
       say($("homeLog"), "Le script Google n'a pas pu se charger.", true); return;
     }
-    google.accounts.oauth2.initTokenClient({
-      client_id: cfg.client,
-      scope:"https://www.googleapis.com/auth/drive.readonly",
-      callback:function(r){
-        if(r && r.access_token){ token = r.access_token; if(cb) cb(); }
-        else say($("homeLog"), "Connexion Google refusée.", true);
-      }
-    }).requestAccessToken();
+    silencieux = Boolean(sansInterface);
+    apresConnexion = cb;
+    if(silencieux) say($("homeLog"), "Reconnexion…");
+    obtenirClient().requestAccessToken(silencieux ? { prompt: "" } : {});
   }
 
   function api(path){
@@ -477,7 +523,9 @@
 
   loadCfg();
   showConnectHex();
-  if(cfg.client) connect(loadAll);
+  // Au démarrage on tente la reconnexion SILENCIEUSE. L'appui sur « Connecter
+  // Drive », lui, reste explicite — c'est le repli si le silence échoue.
+  if(cfg.client) connect(loadAll, true);
 
   // Service worker : il rend l'application installable et consultable hors
   // ligne. Enregistré APRÈS le démarrage pour ne pas retarder le premier
