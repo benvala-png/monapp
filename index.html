@@ -238,6 +238,42 @@
     if(e.target === $("sheet")) $("sheet").classList.add("hidden");
   });
 
+  /* ---------- mémoire des fiches ----------
+     Les fiches lues sont gardées sur l'appareil pour que l'application
+     s'ouvre pleine, sans connexion. La mise à jour reste un GESTE : on se
+     connecte quand on veut du frais.
+
+     Une seule règle en échange : l'application ne doit jamais laisser croire
+     que ce qu'elle montre est d'aujourd'hui. Les fiches sont donc DATÉES, et
+     la date s'affiche dès qu'on lit la mémoire. Un cache qui se tait est un
+     cache qui ment. */
+  var CLE_FICHES = "hbr_fiches";
+  var LIMITE = 3000000;   // au-delà, le stockage refuserait : on renonce en silence
+
+  function memoriserFiches(vides){
+    try{
+      var charge = JSON.stringify({ cards:cards, vides:vides || {}, le:Date.now() });
+      if(charge.length > LIMITE) return;
+      store.set(CLE_FICHES, charge);
+    }catch(e){}
+  }
+
+  function lireMemoire(){
+    try{
+      var brut = store.get(CLE_FICHES);
+      if(!brut) return null;
+      var m = JSON.parse(brut);
+      return (m && m.cards && m.cards.length) ? m : null;
+    }catch(e){ return null; }
+  }
+
+  function quand(ms){
+    try{
+      return new Date(ms).toLocaleString("fr-BE",
+        { day:"numeric", month:"long", hour:"2-digit", minute:"2-digit" });
+    }catch(e){ return "une date inconnue"; }
+  }
+
   /* ---------- Google ----------
      Le jeton reste en mémoire et meurt avec l'onglet : il n'est écrit ni dans
      le stockage local, ni dans un cookie. C'est le comportement le plus sûr,
@@ -257,6 +293,14 @@
 
   function replierSurLeBouton(){
     apresConnexion = null;
+    // S'il y a des fiches à l'écran, on ne les remplace PAS par un bouton :
+    // on dit simplement qu'elles ne sont pas fraîches.
+    if(cards.length){
+      var m = lireMemoire();
+      say($("homeLog"), "Hors connexion — fiches du " + (m ? quand(m.le) : "dernier chargement")
+        + ". « Recharger les fiches » dans ··· pour mettre à jour.");
+      return;
+    }
     say($("homeLog"), "");
     showConnectHex();
   }
@@ -362,6 +406,7 @@
            .forEach(function(x){ empties[x.folder] = x.total; });
         say($("homeLog"), "");
         buildComb(empties);
+        memoriserFiches(empties);
       })
       .catch(function(e){ say($("homeLog"), e.message, true); });
   }
@@ -522,9 +567,21 @@
   $("refresh").addEventListener("click", function(){ token ? loadAll() : connect(loadAll); });
 
   loadCfg();
-  showConnectHex();
-  // Au démarrage on tente la reconnexion SILENCIEUSE. L'appui sur « Connecter
-  // Drive », lui, reste explicite — c'est le repli si le silence échoue.
+
+  // L'application s'ouvre sur ce qu'elle sait déjà, puis va chercher du frais
+  // en arrière-plan. Sans cela, l'écran reste vide le temps du réseau — et
+  // totalement vide s'il n'y a pas de réseau du tout.
+  var memoire = lireMemoire();
+  if(memoire){
+    cards = memoire.cards;
+    buildComb(memoire.vides);
+    say($("homeLog"), "Fiches du " + quand(memoire.le) + ".");
+  } else {
+    showConnectHex();
+  }
+
+  // Reconnexion SILENCIEUSE. L'appui sur « Connecter Drive » reste explicite —
+  // c'est le repli si le silence échoue.
   if(cfg.client) connect(loadAll, true);
 
   // Service worker : il rend l'application installable et consultable hors

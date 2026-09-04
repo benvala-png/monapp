@@ -109,16 +109,24 @@ GitHub Pages, branche `main`, racine — servi sous
 n'est pas à la racine du domaine, un chemin absolu sortirait de la portée de
 l'application et casserait l'installation.
 
-### Ce que le service worker met en cache, et ce qu'il ne met pas
+### Deux mémoires, deux responsables
 
-Il met en cache **la coquille** : la page, le manifeste, les icônes. Réseau
-d'abord, cache en secours — un déploiement est donc visible au chargement
-suivant, pas à celui d'après.
+**Le service worker garde la coquille** : la page, le manifeste, les icônes.
+Réseau d'abord, cache en secours — un déploiement est donc visible au
+chargement suivant, pas à celui d'après. Il **n'intercepte rien** de ce qui
+vient de Google.
 
-Il **n'intercepte rien** de ce qui vient de Google. Les fiches sont relues sur
-Drive à chaque affichage : les servir depuis un cache montrerait une version
-périmée d'une fiche qu'on vient de corriger, et une application de lecture qui
-ment sur son contenu ne vaut rien.
+**L'application garde les fiches**, elle, dans le stockage local
+(`hbr_fiches`). Elle s'ouvre donc pleine et sans réseau, puis va chercher du
+frais en arrière-plan si la connexion silencieuse aboutit.
+
+La règle qui rend ce cache acceptable : **les fiches sont datées et la date
+s'affiche**. « Fiches du 4 septembre à 21:15 », ou « Hors connexion — fiches
+du … » quand la reconnexion échoue. Un cache qui se tait est un cache qui
+ment ; celui-ci dit toujours de quand il date, et « Recharger les fiches »
+reste le geste qui rafraîchit.
+
+Au-delà de 3 Mo, rien n'est mémorisé : le stockage refuserait de toute façon.
 
 Après modification de `sw.js`, incrémenter `VERSION` — sinon les anciens
 fichiers restent en cache.
