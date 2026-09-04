@@ -449,6 +449,16 @@
   loadCfg();
   showConnectHex();
   if(cfg.client) connect(loadAll);
+
+  // Service worker : il rend l'application installable et consultable hors
+  // ligne. Enregistré APRÈS le démarrage pour ne pas retarder le premier
+  // affichage, et sans bloquer quoi que ce soit s'il échoue — une app qui ne
+  // s'installe pas reste une app qui fonctionne.
+  if("serviceWorker" in navigator){
+    window.addEventListener("load", function(){
+      navigator.serviceWorker.register("./sw.js").catch(function(){});
+    });
+  }
 })();
 </script>
 </body>
