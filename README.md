@@ -4,8 +4,9 @@ Application web de lecture des fiches **Markdown** rangées sur Google Drive.
 Un accueil en nid d'abeille — un hexagone par sous-dossier — puis la liste des
 fiches, puis la fiche.
 
-Installable sur téléphone (PWA), consultable hors ligne pour la coquille de
-l'application. Les fiches, elles, sont toujours relues sur Drive.
+Installable sur téléphone (PWA). Elle s'ouvre sur les fiches qu'elle a déjà
+lues — donc sans réseau — et va chercher du frais en arrière-plan. La date des
+fiches affichées est toujours indiquée.
 
 ---
 
